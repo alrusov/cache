@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -24,17 +25,18 @@ type (
 		def
 		cond  *sync.Cond // Для ожидания первого заполнения
 		cache *Cache     // Ссылка на кеш
-		Key   string     `json:"key"` // Ключ
-		Data  any        `json:"-"`   // Данные
+		Data  any        `json:"-"` // Данные
 	}
 
-	Stats map[string]Stat
+	Stats []Stat
 
 	Stat struct {
 		def
 	}
 
 	def struct {
+		Key             string    `json:"key"`             // Ключ
+		Description     string    `json:"description"`     // Дополнительное описание для визуализации
 		Hash            string    `json:"hash"`            // hash
 		CreatedAt       time.Time `json:"createdAt"`       // Время первоначального создания
 		InProgressFrom  time.Time `json:"inProgressFrom"`  // Время начала обновления
@@ -71,11 +73,11 @@ func initModule(appCfg any, h any) (err error) {
 
 //----------------------------------------------------------------------------------------------------------------------------//
 
-func Get(id uint64, key string, extra ...any) (e *Elem, data any, code int) {
-	return storage.Get(id, key, extra...)
+func Get(id uint64, key string, description string, extra ...any) (e *Elem, data any, code int) {
+	return storage.Get(id, key, description, extra...)
 }
 
-func (c *Cache) Get(id uint64, key string, extra ...any) (e *Elem, data any, code int) {
+func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e *Elem, data any, code int) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -88,10 +90,11 @@ func (c *Cache) Get(id uint64, key string, extra ...any) (e *Elem, data any, cod
 		e = &Elem{
 			cond:  sync.NewCond(c.mutex),
 			cache: c,
-			Key:   key,
 			def: def{
-				Hash:      hash,
-				CreatedAt: now,
+				Key:         key,
+				Description: description,
+				Hash:        hash,
+				CreatedAt:   now,
 			},
 		}
 
@@ -198,15 +201,36 @@ func (c *Cache) GetStat() (s Stats) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	s = make(Stats, len(c.data))
+	s = make(Stats, 0, len(c.data))
 
-	for key, e := range c.data {
-		s[key] = Stat{
-			def: e.def,
-		}
+	for _, e := range c.data {
+		s = append(s,
+			Stat{
+				def: e.def,
+			},
+		)
 	}
 
+	sort.Sort(s)
 	return
+}
+
+//----------------------------------------------------------------------------------------------------------------------------//
+
+func (s Stats) Len() int {
+	return len(s)
+}
+
+func (s Stats) Less(i, j int) bool {
+	if s[i].Key == s[j].Key {
+		return s[i].Description < s[j].Description
+	}
+
+	return s[i].Key < s[j].Key
+}
+
+func (s Stats) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
 
 //----------------------------------------------------------------------------------------------------------------------------//

@@ -35,17 +35,18 @@ type (
 	}
 
 	def struct {
-		Key             string    `json:"key"`             // Ключ
-		Description     string    `json:"description"`     // Дополнительное описание для визуализации
-		Hash            string    `json:"hash"`            // hash
-		CreatedAt       time.Time `json:"createdAt"`       // Время первоначального создания
-		InProgressFrom  time.Time `json:"inProgressFrom"`  // Время начала обновления
-		LastUpdatedAt   time.Time `json:"lastUpdatedAt"`   // Время последнего обновления
-		ExparedAt       time.Time `json:"exparedAt"`       // Время оуончания жизни
-		Filled          bool      `json:"filled"`          // Зполнено актуальными данными
-		Code            int       `json:"code"`            // http code
-		NumberOfUpdates uint      `json:"numberOfUpdates"` // Количество обновлений
-		NumberOfUses    uint      `json:"numberOfUses"`    // Количество использований
+		Key             string        `json:"key"`             // Ключ
+		Description     string        `json:"description"`     // Дополнительное описание для визуализации
+		Hash            string        `json:"hash"`            // hash
+		Lifetime        time.Duration `json:"lifetime"`        // lifetime
+		CreatedAt       time.Time     `json:"createdAt"`       // Время первоначального создания
+		InProgressFrom  time.Time     `json:"inProgressFrom"`  // Время начала обновления
+		LastUpdatedAt   time.Time     `json:"lastUpdatedAt"`   // Время последнего обновления
+		ExparedAt       time.Time     `json:"exparedAt"`       // Время оуончания жизни
+		Filled          bool          `json:"filled"`          // Зполнено актуальными данными
+		Code            int           `json:"code"`            // code
+		NumberOfUpdates uint          `json:"numberOfUpdates"` // Количество обновлений
+		NumberOfUses    uint          `json:"numberOfUses"`    // Количество использований
 	}
 )
 
@@ -63,12 +64,51 @@ func init() {
 
 // Инициализация
 func initModule(appCfg any, h any) (err error) {
-	storage = &Cache{
+	storage = New()
+
+	Log.Message(log.INFO, "Initialized")
+	return
+}
+
+//----------------------------------------------------------------------------------------------------------------------------//
+
+func New() (c *Cache) {
+	c = &Cache{
 		mutex: new(sync.Mutex),
 		data:  make(Elems, 128),
 	}
 
-	return
+	go c.gc()
+
+	return c
+}
+
+//----------------------------------------------------------------------------------------------------------------------------//
+
+func (c *Cache) gc() {
+	Log.Message(log.INFO, "gc started")
+
+	for misc.AppStarted() {
+		c.mutex.Lock()
+		now := misc.NowUTC()
+
+		for hash, e := range c.data {
+			if !e.InProgressFrom.IsZero() {
+				continue
+			}
+
+			if now.Sub(e.LastUpdatedAt) < 2*e.Lifetime {
+				continue
+			}
+
+			delete(c.data, hash)
+		}
+
+		c.mutex.Unlock()
+		misc.Sleep(60 * time.Second)
+	}
+
+	Log.Message(log.INFO, "gc stopped")
 }
 
 //----------------------------------------------------------------------------------------------------------------------------//
@@ -91,10 +131,9 @@ func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e 
 			cond:  sync.NewCond(c.mutex),
 			cache: c,
 			def: def{
-				Key:         key,
-				Description: description,
-				Hash:        hash,
-				CreatedAt:   now,
+				Key:       key,
+				Hash:      hash,
+				CreatedAt: now,
 			},
 		}
 
@@ -141,6 +180,7 @@ func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e 
 	// Вызывающий должен это понять по e != nil, сформировать данные и вызвать e.Commit()
 
 	e.InProgressFrom = now
+	e.Description = description
 
 	return
 }
@@ -154,6 +194,7 @@ func (e *Elem) Commit(id uint64, data any, code int, lifetime time.Duration) {
 
 	e.InProgressFrom = time.Time{}
 	e.LastUpdatedAt = misc.NowUTC()
+	e.Lifetime = lifetime
 	e.ExparedAt = e.LastUpdatedAt.Add(lifetime)
 	e.Filled = true
 	e.Code = code

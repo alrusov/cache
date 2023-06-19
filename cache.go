@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alrusov/config"
 	"github.com/alrusov/initializer"
 	"github.com/alrusov/jsonw"
 	"github.com/alrusov/log"
@@ -35,18 +36,18 @@ type (
 	}
 
 	def struct {
-		Key             string        `json:"key"`             // Ключ
-		Description     string        `json:"description"`     // Дополнительное описание для визуализации
-		Hash            string        `json:"hash"`            // hash
-		Lifetime        time.Duration `json:"lifetime"`        // lifetime
-		CreatedAt       time.Time     `json:"createdAt"`       // Время первоначального создания
-		InProgressFrom  time.Time     `json:"inProgressFrom"`  // Время начала обновления
-		LastUpdatedAt   time.Time     `json:"lastUpdatedAt"`   // Время последнего обновления
-		ExparedAt       time.Time     `json:"exparedAt"`       // Время оуончания жизни
-		Filled          bool          `json:"filled"`          // Зполнено актуальными данными
-		Code            int           `json:"code"`            // code
-		NumberOfUpdates uint          `json:"numberOfUpdates"` // Количество обновлений
-		NumberOfUses    uint          `json:"numberOfUses"`    // Количество использований
+		Key             string          `json:"key"`             // Ключ
+		Description     string          `json:"description"`     // Дополнительное описание для визуализации
+		Hash            string          `json:"hash"`            // hash
+		Lifetime        config.Duration `json:"lifetime"`        // lifetime
+		CreatedAt       time.Time       `json:"createdAt"`       // Время первоначального создания
+		InProgressFrom  time.Time       `json:"inProgressFrom"`  // Время начала обновления
+		LastUpdatedAt   time.Time       `json:"lastUpdatedAt"`   // Время последнего обновления
+		ExparedAt       time.Time       `json:"exparedAt"`       // Время оуончания жизни
+		Filled          bool            `json:"filled"`          // Зполнено актуальными данными
+		Code            int             `json:"code"`            // code
+		NumberOfUpdates uint            `json:"numberOfUpdates"` // Количество обновлений
+		NumberOfUses    uint            `json:"numberOfUses"`    // Количество использований
 	}
 )
 
@@ -97,7 +98,7 @@ func (c *Cache) gc() {
 				continue
 			}
 
-			if now.Sub(e.LastUpdatedAt) < 2*e.Lifetime {
+			if now.Sub(e.LastUpdatedAt) < 2*e.Lifetime.D() {
 				continue
 			}
 
@@ -188,14 +189,14 @@ func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e 
 //----------------------------------------------------------------------------------------------------------------------------//
 
 // Данные сформированы, сохраняем
-func (e *Elem) Commit(id uint64, data any, code int, lifetime time.Duration) {
+func (e *Elem) Commit(id uint64, data any, code int, lifetime config.Duration) {
 	e.cache.mutex.Lock()
 	defer e.cache.mutex.Unlock()
 
 	e.InProgressFrom = time.Time{}
 	e.LastUpdatedAt = misc.NowUTC()
 	e.Lifetime = lifetime
-	e.ExparedAt = e.LastUpdatedAt.Add(lifetime)
+	e.ExparedAt = e.LastUpdatedAt.Add(lifetime.D())
 	e.Filled = true
 	e.Code = code
 	e.Data = data

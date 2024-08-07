@@ -16,8 +16,8 @@ import (
 
 type (
 	Cache struct {
-		mutex *sync.Mutex
-		data  Elems
+		sync.Mutex
+		data Elems
 	}
 
 	Elems map[string]*Elem
@@ -75,8 +75,7 @@ func initModule(appCfg any, h any) (err error) {
 
 func New() (c *Cache) {
 	c = &Cache{
-		mutex: new(sync.Mutex),
-		data:  make(Elems, 128),
+		data: make(Elems, 128),
 	}
 
 	go c.gc()
@@ -90,7 +89,7 @@ func (c *Cache) gc() {
 	Log.Message(log.INFO, "gc started")
 
 	for misc.AppStarted() {
-		c.mutex.Lock()
+		c.Lock()
 		now := misc.NowUTC()
 
 		for hash, e := range c.data {
@@ -105,7 +104,7 @@ func (c *Cache) gc() {
 			delete(c.data, hash)
 		}
 
-		c.mutex.Unlock()
+		c.Unlock()
 		misc.Sleep(60 * time.Second)
 	}
 
@@ -119,8 +118,8 @@ func Get(id uint64, key string, description string, extra ...any) (e *Elem, data
 }
 
 func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e *Elem, data any, code int) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	now := misc.NowUTC()
 
@@ -129,7 +128,7 @@ func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e 
 	if !exists { // Не существует
 		// Создадим новый
 		e = &Elem{
-			cond:  sync.NewCond(c.mutex),
+			cond:  sync.NewCond(&c.Mutex),
 			cache: c,
 			def: def{
 				Key:       key,
@@ -190,8 +189,8 @@ func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e 
 
 // Данные сформированы, сохраняем
 func (e *Elem) Commit(id uint64, data any, code int, lifetime config.Duration) {
-	e.cache.mutex.Lock()
-	defer e.cache.mutex.Unlock()
+	e.cache.Lock()
+	defer e.cache.Unlock()
 
 	e.InProgressFrom = time.Time{}
 	e.LastUpdatedAt = misc.NowUTC()
@@ -240,8 +239,8 @@ func GetStat() (s Stats) {
 }
 
 func (c *Cache) GetStat() (s Stats) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	s = make(Stats, 0, len(c.data))
 

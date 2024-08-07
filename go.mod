@@ -1,13 +1,13 @@
 module github.com/alrusov/cache
 
-go 1.20
+go 1.22.5
 
 require (
-	github.com/alrusov/config v0.1.57
+	github.com/alrusov/config v0.1.59
 	github.com/alrusov/initializer v0.1.2
 	github.com/alrusov/jsonw v0.1.3
-	github.com/alrusov/log v0.1.37
-	github.com/alrusov/misc v1.1.8
+	github.com/alrusov/log v0.1.39
+	github.com/alrusov/misc v1.1.15
 )
 
 require (

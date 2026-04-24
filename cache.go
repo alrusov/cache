@@ -39,12 +39,12 @@ type (
 		Key             string          `json:"key"`             // Ключ
 		Description     string          `json:"description"`     // Дополнительное описание для визуализации
 		Hash            string          `json:"hash"`            // hash
-		Lifetime        config.Duration `json:"lifetime"`        // lifetime
+		Lifetime        config.Duration `json:"lifetime"`        // Установленное время жизни записи
 		CreatedAt       time.Time       `json:"createdAt"`       // Время первоначального создания
-		InProgressFrom  time.Time       `json:"inProgressFrom"`  // Время начала обновления
+		InProgressFrom  time.Time       `json:"inProgressFrom"`  // Время начала обновления (если сейчас в процессе обновления)
 		LastUpdatedAt   time.Time       `json:"lastUpdatedAt"`   // Время последнего обновления
-		ExparedAt       time.Time       `json:"exparedAt"`       // Время оуончания жизни
-		Filled          bool            `json:"filled"`          // Зполнено актуальными данными
+		ExpiredAt       time.Time       `json:"expiredAt"`       // Время окончания жизни
+		Filled          bool            `json:"filled"`          // Заполнено актуальными данными?
 		Code            int             `json:"code"`            // code
 		NumberOfUpdates uint            `json:"numberOfUpdates"` // Количество обновлений
 		NumberOfUses    uint            `json:"numberOfUses"`    // Количество использований
@@ -142,7 +142,7 @@ func (c *Cache) Get(id uint64, key string, description string, extra ...any) (e 
 
 	} else { // Уже существует
 		if e.Filled { // Заполнен
-			if now.Before(e.ExparedAt) || // Актуален
+			if now.Before(e.ExpiredAt) || // Актуален
 				!e.InProgressFrom.IsZero() { // или в процессе обновления
 				// Берём что дают и уходим
 				code = e.Code
@@ -195,7 +195,7 @@ func (e *Elem) Commit(id uint64, data any, code int, lifetime config.Duration) {
 	e.InProgressFrom = time.Time{}
 	e.LastUpdatedAt = misc.NowUTC()
 	e.Lifetime = lifetime
-	e.ExparedAt = e.LastUpdatedAt.Add(lifetime.D())
+	e.ExpiredAt = e.LastUpdatedAt.Add(lifetime.D())
 	e.Filled = true
 	e.Code = code
 	e.Data = data
